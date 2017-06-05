@@ -1,11 +1,13 @@
 require 'net/smtp'
 require 'dnsruby'
+require 'resolv'
+
 
 class EmailVerifier::Checker
 
   ##
   # Returns server object for given email address or throws exception
-  # Object returned isn't yet connected. It has internally a list of 
+  # Object returned isn't yet connected. It has internally a list of
   # real mail servers got from MX dns lookup
   def initialize(address)
     @email   = address
@@ -14,7 +16,7 @@ class EmailVerifier::Checker
     raise EmailVerifier::NoMailServerException.new("No mail server for #{address}") if @servers.empty?
     @smtp    = nil
 
-    # this is because some mail servers won't give any info unless 
+    # this is because some mail servers won't give any info unless
     # a real user asks for it:
     @user_email = EmailVerifier.config.verifier_email
     _, @user_domain = @user_email.split "@"
@@ -22,14 +24,13 @@ class EmailVerifier::Checker
 
   def list_mxs(domain)
     return [] unless domain
-    res = Dnsruby::DNS.new
     mxs = []
-    res.each_resource(domain, 'MX') do |rr|
+    Resolv::DNS.new.getresources(domain, Resolv::DNS::Resource::IN::MX).each do |rr|
       mxs << { priority: rr.preference, address: rr.exchange.to_s }
     end
     mxs.sort_by { |mx| mx[:priority] }
   rescue Dnsruby::NXDomain
-    raise EmailVerifier::NoMailServerException.new("#{domain} does not exist") 
+    raise EmailVerifier::NoMailServerException.new("#{domain} does not exist")
   end
 
   def is_connected
@@ -72,7 +73,7 @@ class EmailVerifier::Checker
 
   def rcptto(address)
     ensure_connected
-   
+
     begin
       ensure_250 @smtp.rcptto(address)
     rescue => e
